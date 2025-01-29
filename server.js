@@ -9,12 +9,17 @@ const bcrypt = require('bcrypt');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enable CORS for localhost
+// Enable CORS for all origins
 app.use(cors({
-    origin: ['http://127.0.0.1:5500', 'http://localhost:5500', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    credentials: true
+    origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'https://amazing-sable-725045.netlify.app', 'https://serverbackendmain.onrender.com'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use(express.json());
 
@@ -535,8 +540,7 @@ app.listen(port, () => {
     console.log('Allowed origins:', [
         'http://localhost:5500',
         'http://127.0.0.1:5500',
-        'http://localhost:3000',
-        'https://microsoft-reset-password.vercel.app',
-        'https://last-whpm.onrender.com'
+        'https://amazing-sable-725045.netlify.app',
+        'https://serverbackendmain.onrender.com'
     ]);
 });
