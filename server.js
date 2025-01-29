@@ -9,17 +9,24 @@ const bcrypt = require('bcrypt');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enable CORS for all origins
+// More permissive CORS settings
 app.use(cors({
-    origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'https://amazing-sable-725045.netlify.app', 'https://serverbackendmain.onrender.com'],
+    origin: '*',  // Allow all origins
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     optionsSuccessStatus: 200
 }));
 
 // Handle preflight requests
 app.options('*', cors());
+
+// Add security headers
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    next();
+});
 
 app.use(express.json());
 
