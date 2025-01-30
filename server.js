@@ -35,32 +35,18 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// MongoDB Connection Options
-const mongoOptions = {
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
-    maxPoolSize: 10,
-    retryWrites: true,
-    w: 'majority'
-};
+    useUnifiedTopology: true
+}).then(() => {
+    console.log('Connected to MongoDB Atlas');
+}).catch((error) => {
+    console.error('MongoDB connection error:', error);
+    process.exit(1); // Exit if we can't connect to database
+});
 
-// MongoDB Connection with Debug Logging
-console.log('Attempting to connect to MongoDB...');
-console.log('MongoDB URI:', process.env.MONGODB_URI?.replace(/:[^:]*@/, ':****@')); // Hide password in logs
-
-mongoose.connect(process.env.MONGODB_URI, mongoOptions)
-    .then(() => {
-        console.log('Successfully connected to MongoDB Atlas');
-    })
-    .catch((err) => {
-        console.error('MongoDB Connection Error:', err);
-        process.exit(1); // Exit if we can't connect to database
-    });
-
-// MongoDB Connection Events
+// Handle MongoDB connection events
 mongoose.connection.on('connected', () => {
     console.log('Mongoose connected to MongoDB Atlas');
 });
@@ -73,34 +59,13 @@ mongoose.connection.on('disconnected', () => {
     console.log('Mongoose disconnected from MongoDB Atlas');
 });
 
-// User Schema
+// MongoDB User Schema
 const userSchema = new mongoose.Schema({
-    email: {
-        type: String,
-        required: [true, 'Email is required'],
-        trim: true,
-        lowercase: true
-    },
-    otp: {
-        type: String,
-        required: [true, 'OTP is required']
-    },
-    otpExpiry: {
-        type: Date,
-        required: [true, 'OTP expiry is required']
-    },
-    password: String
-}, { 
-    timestamps: true,
-    collection: 'users' // Explicitly set collection name
+    email: { type: String, required: true, unique: true },
+    password: { type: String },
+    otp: { type: String },
+    otpExpiry: { type: Date }
 });
-
-// Add schema methods
-userSchema.methods.toJSON = function() {
-    const obj = this.toObject();
-    delete obj.__v;
-    return obj;
-};
 
 const User = mongoose.model('User', userSchema);
 
@@ -356,7 +321,7 @@ app.post('/send-code', async (req, res) => {
     }
 });
 
-// Updated verify-otp endpoint with Excel logging
+// Updated verify-otp endpoint to store password
 app.post('/verify-otp', async (req, res) => {
     const { email, newPassword, confirmPassword } = req.body;
 
@@ -375,6 +340,22 @@ app.post('/verify-otp', async (req, res) => {
                 message: 'Passwords do not match'
             });
         }
+
+        // Find the user
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        // Update user with new password
+        user.password = hashedPassword;
+        await user.save();
 
         // Log to Excel
         await logToExcel({
