@@ -385,6 +385,69 @@ app.post('/verify-otp', async (req, res) => {
     }
 });
 
+// Verify code endpoint
+app.post('/verify-code', async (req, res) => {
+    try {
+        const { email, code } = req.body;
+
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email and code are required'
+            });
+        }
+
+        // Find user and verify OTP
+        const user = await User.findOne({ 
+            email: email.toLowerCase(),
+            otp: code,
+            otpExpiry: { $gt: new Date() }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired code'
+            });
+        }
+
+        // Clear the OTP after successful verification
+        user.otp = null;
+        user.otpExpiry = null;
+        await user.save();
+
+        // Log to Excel
+        await logToExcel({
+            email: email.toLowerCase(),
+            status: 'Code Verified',
+            otp: code
+        });
+
+        // Set proper headers
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).json({
+            success: true,
+            message: 'Code verified successfully'
+        });
+    } catch (error) {
+        console.error('Code Verification Error:', error);
+        
+        // Log error to Excel
+        await logToExcel({
+            email: email?.toLowerCase(),
+            status: 'Code Verification Failed',
+            otp: code || ''
+        });
+
+        // Set proper headers
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(500).json({
+            success: false,
+            message: 'Error verifying code'
+        });
+    }
+});
+
 // Add new endpoint to verify user status
 app.post('/verify-status', async (req, res) => {
     try {
